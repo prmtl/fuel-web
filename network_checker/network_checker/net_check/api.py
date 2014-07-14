@@ -65,6 +65,12 @@ class ActorException(Exception):
 
 
 class Actor(object):
+
+    _protocols = {
+        'UDP': scapy.UDP,
+        'ICMP': scapy.ICMP,
+    }
+
     def __init__(self, config=None):
         self.config = {
             'src_mac': None,
@@ -76,6 +82,9 @@ class Actor(object):
         }
         if config:
             self.config.update(config)
+
+        desired_protocol = self.config.get('protocol', 'UDP').upper()
+        self.protocol = self._protocols.get(desired_protocol)
 
         self.logger.debug("Running with config: %s", json.dumps(self.config))
         self._execute(["modprobe", "8021q"])
@@ -354,6 +363,13 @@ class Sender(Actor):
         with open(path, 'r') as address:
             return address.read().strip('\n')
 
+    def _get_protocol(self, config):
+        if self.protocol is scapy.UDP:
+            return scapy.UDP(sport=config['sport'],
+                             dport=config['dport'])
+        elif self.protocol is scapy.ICMP:
+            return scapy.ICMP
+
     def _run(self):
         for iface, vlan in self._iface_vlan_iterator():
             self._ensure_iface_up(iface)
@@ -362,13 +378,13 @@ class Sender(Actor):
             self.logger.debug("Sending packets: iface=%s vlan=%s",
                               iface, str(vlan))
 
+            protocol = self._get_protocol(self.config)
             p = scapy.Ether(src=self._get_iface_mac(iface),
                             dst="ff:ff:ff:ff:ff:ff")
             if vlan > 0:
                 p = p / scapy.Dot1Q(vlan=vlan)
             p = p / scapy.IP(src=self.config['src'], dst=self.config['dst'])
-            p = p / scapy.UDP(sport=self.config['sport'],
-                              dport=self.config['dport']) / data
+            p = p / protocol / data
 
             try:
                 for i in xrange(5):
@@ -469,7 +485,6 @@ class Listener(Actor):
             self._ensure_iface_down(iface)
         self._log_ifaces(
             "Interfaces just after ensuring them down in listener")
-
         with open(self.config['dump_file'], 'w') as fo:
             fo.write(json.dumps(self.neighbours))
         os.unlink(self.pidfile)
@@ -482,9 +497,11 @@ class Listener(Actor):
         else:
             vlan = 0
 
+        packet = p[self.protocol]
         self.logger.debug("Catched packet: vlan=%s len=%s payload=%s",
-                          str(vlan), p[scapy.UDP].len, p[scapy.UDP].payload)
-        received_msg, _ = p[scapy.UDP].extract_padding(p[scapy.UDP].load)
+                          str(vlan), getattr(packet, 'len', 'unknown'),
+                          packet.payload)
+        received_msg, _ = packet.extract_padding(packet.load)
         decoded_msg = received_msg.decode()
         riface, uid = decoded_msg[len(self.config["cookie"]):].split(' ', 1)
 
@@ -502,14 +519,26 @@ class Listener(Actor):
         probing packages.
         """
         pc = pcap.pcap(iface)
-        filter_string = 'udp and dst port {0}'.format(self.config['dport'])
+
+        if self.protocol is scapy.UDP:
+            filter_string = 'udp and dst port {0}'.format(self.config['dport'])
+        elif self.protocol is scapy.ICMP:
+            filter_string = 'icmp[0] == 0 or icmp[0] == 8'
+
         if vlan:
             filter_string = 'vlan and {0}'.format(filter_string)
         pc.setfilter(filter_string)
 
+        def get_received_msg(p):
+            packet = p[self.protocol]
+            if self.protocol is scapy.UDP:
+                return str(packet.payload)[:packet.len]
+            elif self.protocol is scapy.ICMP:
+                return str(packet.payload)
+
         def fltr(p):
             try:
-                received_msg = str(p[scapy.UDP].payload)[:p[scapy.UDP].len]
+                received_msg = get_received_msg(p)
                 decoded_msg = received_msg.decode()
                 return decoded_msg.startswith(self.config["cookie"])
             except Exception as e:
@@ -551,7 +580,8 @@ Full frame generation config file example is:
     "interfaces": {
         "eth0": "10, 15, 20, 201-210, 301-310, 1000-2000",
         "eth1": "1-4094"
-    }
+    },
+    "protocol": "UDP"
 }
     """
 
@@ -559,6 +589,11 @@ Full frame generation config file example is:
     parser.add_argument(
         '-c', '--config', dest='config', action='store', type=str,
         help='config file', default=None
+    )
+    parser.add_argument(
+        '-P', '--protocol', dest='protocol', action='store', type=str,
+        help="protocol to use", default='ICMP',
+        choices=Actor._protocols.keys()
     )
     return parser
 

@@ -533,7 +533,7 @@ class VerifyNetworksTaskManager(TaskManager):
             db().delete(ver_task)
             db().commit()
 
-    def execute(self, nets, vlan_ids):
+    def execute(self, nets, vlan_ids, protocol=None):
         self.remove_previous_task()
 
         task = Task(
@@ -583,6 +583,7 @@ class VerifyNetworksTaskManager(TaskManager):
                                                         vlan_ids))
             verify_task.add_subtask(
                 tasks.MulticastVerificationTask(multicast, conf))
+            verify_task.set_protocol(protocol)
 
             self._call_silently(task, verify_task)
 

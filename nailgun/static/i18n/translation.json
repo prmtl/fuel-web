@@ -307,7 +307,10 @@
                         "node_name": "Node Name",
                         "node_mac_address": "Node MAC address",
                         "node_interface": "Node Interface",
-                        "expected_vlan": "Expected VLAN (not received)"
+                        "expected_vlan": "Expected VLAN (not received)",
+                        "udp": "UDP",
+                        "icmp": "ICMP",
+                        "protocol": "Protocol"
                     },
                     "network_parameters": {
                         "ip_range": "IP Range",

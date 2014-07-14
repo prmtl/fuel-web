@@ -481,13 +481,18 @@ class VerifyNetworksTask(BaseNetworkVerification):
     def __init__(self, *args):
         super(VerifyNetworksTask, self).__init__(*args)
         self.subtasks = []
+        self.protocol = None
 
     def add_subtask(self, subtask):
         self.subtasks.append(subtask.get_message())
 
+    def set_protocol(self, protocol):
+        self.protocol = protocol
+
     def get_message(self):
         message = super(VerifyNetworksTask, self).get_message()
         message['subtasks'] = self.subtasks
+        message['protocol'] = self.protocol
         return message
 
 

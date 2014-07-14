@@ -229,6 +229,9 @@ class NetworkConfigurationVerifyHandler(ProviderHandler):
             n for n in data["networks"] if n.get("name") != "fuelweb_admin"
         ]
 
+        verification_protocol = data["networking_parameters"].get(
+            'verification_protocol')
+
         vlan_ids = [{
                     'name': n['name'],
                     'vlans': objects.Cluster.get_network_manager(
@@ -239,7 +242,7 @@ class NetworkConfigurationVerifyHandler(ProviderHandler):
 
         task_manager = VerifyNetworksTaskManager(cluster_id=cluster.id)
         try:
-            task = task_manager.execute(data, vlan_ids)
+            task = task_manager.execute(data, vlan_ids, verification_protocol)
         except errors.CantRemoveOldVerificationTask:
             raise self.http(400, "You cannot delete running task manually")
         return Task.to_json(task)

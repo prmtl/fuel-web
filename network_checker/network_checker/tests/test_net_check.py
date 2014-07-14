@@ -26,7 +26,24 @@ from scapy import all as scapy
 from network_checker.net_check import api
 
 
-class BaseListenerTestCase(unittest.TestCase):
+class BaseTestUDP(object):
+    protocol = scapy.UDP
+
+    def get_protocol(self, config, **kwargs):
+        return scapy.UDP(sport=config['sport'], dport=config['dport'],
+                         **kwargs)
+
+
+class BaseTestICMP(object):
+    protocol = scapy.ICMP
+
+    def get_protocol(self, config, **kwargs):
+        return scapy.ICMP()
+
+
+class BaseListenerTestCase(object):
+
+    protocol = None
 
     def setUp(self, config=None):
         self.iface = os.environ.get('NET_CHECK_IFACE_1', 'eth1')
@@ -36,7 +53,8 @@ class BaseListenerTestCase(unittest.TestCase):
             "interfaces": {self.iface: "0,100,101,102,103,104,105,106,107"},
             "action": "listen",
             "cookie": "Nailgun:", "dport": 31337, "sport": 31337,
-            "src_mac": None, "dump_file": "/var/tmp/net-probe-dump"
+            "src_mac": None, "dump_file": "/var/tmp/net-probe-dump",
+            "protocol": self.protocol.name,
         }
         self.config = config or default_config
         self.start_socket()
@@ -73,7 +91,7 @@ class BaseListenerTestCase(unittest.TestCase):
             os.unlink(self.config['dump_file'])
 
 
-class TestCaseListenerPcap(BaseListenerTestCase):
+class BaseTestListenerPca(BaseListenerTestCase):
 
     def send_packets(self):
         for vlan in self.config['interfaces'][self.iface].split(','):
@@ -88,10 +106,9 @@ class TestCaseListenerPcap(BaseListenerTestCase):
         if int(vlan) > 0:
             p = p / scapy.Dot1Q(vlan=int(vlan))
         message_len = len(normal_data) + 8
+        protocol = self.get_protocol(self.config, len=message_len)
         p = p / scapy.IP(src=self.config['src'], dst=self.config['dst'])
-        p = p / scapy.UDP(sport=self.config['sport'],
-                          dport=self.config['dport'],
-                          len=message_len) / normal_data
+        p = p / protocol / normal_data
         return p
 
     def test_listener_pcap_file(self):
@@ -111,18 +128,27 @@ class TestCaseListenerPcap(BaseListenerTestCase):
             u'105': {u'1': [self.iface]}}})
 
 
-class TestCaseListenerCorruptedData(BaseListenerTestCase):
+class TestCaseListenerPcaUDP(BaseTestUDP, BaseTestListenerPca,
+                             unittest.TestCase):
+    pass
+
+
+class TestCaseListenerPcaICMP(BaseTestICMP, BaseTestListenerPca,
+                              unittest.TestCase):
+    pass
+
+
+class BaseTestListenerCorruptedData(BaseListenerTestCase):
 
     def send_packets(self):
         normal_data = 'Nailgun:{iface} 2'.format(iface=self.iface)
         corrupted_data = normal_data + '7h 7\00\00\00'
         message_len = len(normal_data) + 8
+        protocol = self.get_protocol(self.config, len=message_len)
         p = scapy.Ether(src=self.config['src_mac'],
                         dst="ff:ff:ff:ff:ff:ff")
         p = p / scapy.IP(src=self.config['src'], dst=self.config['dst'])
-        p = p / scapy.UDP(sport=self.config['sport'],
-                          dport=self.config['dport'],
-                          len=message_len) / corrupted_data
+        p = p / protocol / corrupted_data
         for i in xrange(5):
             scapy.sendp(p, iface=self.iface)
 
@@ -134,7 +160,13 @@ class TestCaseListenerCorruptedData(BaseListenerTestCase):
         self.assertEqual(data, {self.iface: {u'0': {u'2': [self.iface]}}})
 
 
-class TestNetCheckSender(unittest.TestCase):
+class TestCaseListenerCorruptedDataUDP(BaseTestUDP,
+                                       BaseTestListenerCorruptedData,
+                                       unittest.TestCase):
+    pass
+
+
+class BaseTestNetCheckSender(object):
 
     def setUp(self):
         self.iface = os.environ.get('NET_CHECK_IFACE_1', 'eth1')
@@ -188,3 +220,13 @@ class TestNetCheckSender(unittest.TestCase):
 
         expected_vlans = set(self.config['interfaces'][self.iface].split(','))
         self.assertEqual(expected_vlans, self.received_vlans)
+
+
+class TesCaseNetCheckSenderUDP(BaseTestUDP, BaseTestNetCheckSender,
+                               unittest.TestCase):
+    pass
+
+
+class TesCaseNetCheckSenderICMP(BaseTestICMP, BaseTestNetCheckSender,
+                                unittest.TestCase):
+    pass

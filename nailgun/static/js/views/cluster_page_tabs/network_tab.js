@@ -75,12 +75,18 @@ function(utils, models, commonViews, dialogViews, networkTabTemplate, networkTem
                 this.networkConfiguration.get('networking_parameters').set({floating_ranges: removeEmptyRanges(floatingRanges)});
             }
         },
+        getVerificationProtocol: function () {
+            return this.$('.verify-networks-protocol').val();
+        },
         startVerification: function() {
             var task = new models.Task();
+            var data = this.networkConfiguration;
+            var protocol = this.getVerificationProtocol()
+            data.get('networking_parameters').set({verification_protocol: protocol});
             var options = {
                 method: 'PUT',
                 url: _.result(this.networkConfiguration, 'url') + '/verify',
-                data: JSON.stringify(this.networkConfiguration)
+                data: JSON.stringify(data)
             };
             task.save({}, options)
                 .fail(_.bind(function() {
