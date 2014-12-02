@@ -585,8 +585,8 @@ TEMPLATE_DIR: ${artifacts_path}/static_compressed
 DATABASE:
   name: ${TEST_NAILGUN_DB}
   engine: "postgresql"
-  host: "localhost"
-  port: "5432"
+  host: "/var/run/postgresql/"
+  port: ""
   user: "nailgun"
   passwd: "nailgun"
 API_LOG: ${artifacts_path}/api.log

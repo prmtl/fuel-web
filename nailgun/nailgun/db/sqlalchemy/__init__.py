@@ -31,9 +31,20 @@ from nailgun.db.deadlock_detector import handle_lock
 from nailgun.settings import settings
 
 
-db_str = "{engine}://{user}:{passwd}@{host}:{port}/{name}".format(
-    **settings.DATABASE)
+def make_dsn(db_settings):
+    """Constructs DSN string that will be passed to `sqlalchemy.create_engine`
 
+    If host starts with '/' it will be treated as a socket and port will be ingored.
+    """
+    if db_settings['host'].startswith('/'):
+        # use socket
+        dsn = "{engine}://{user}:{passwd}@/{name}?host={host}"
+    else:
+        # use regular connection
+        dsn = "{engine}://{user}:{passwd}@{host}:{port}/{name}"
+    return dsn.format(**db_settings)
+
+db_str = make_dsn(settings.DATABASE)
 
 engine = create_engine(db_str, client_encoding='utf8')
 
