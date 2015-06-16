@@ -27,15 +27,15 @@ from nailgun.logger import logger
 from nailgun.settings import settings
 from nailgun.rpc import utils
 
-creds = (
-    ("userid", "guest"),
-    ("password", "guest"),
-    ("hostname", "localhost"),
-    ("port", "5672"),
-)
+creds = {
+    "userid": "guest",
+    "password": "guest",
+    "hostname": "localhost",
+    "port": "5672",
+}
 
 conn_str = 'amqp://{0}:{1}@{2}:{3}//'.format(
-    *[settings.RABBITMQ.get(*cred) for cred in creds]
+    *[settings.RABBITMQ.get(cred, default) for cred, default in creds.items()]
 )
 
 naily_exchange = Exchange(

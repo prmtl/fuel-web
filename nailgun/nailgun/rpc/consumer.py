@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-#    Copyright 2013 Mirantis, Inc.
+#    Copyright 2015 Mirantis, Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -13,18 +13,16 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-
-import threading
-import traceback
-
-from kombu import Connection
+import amqp.exceptions as amqp_exceptions
 from kombu.mixins import ConsumerMixin
+import six
 
+
+from nailgun import rpc
 from nailgun.db import db
 from nailgun.errors import errors
 from nailgun.logger import logger
-import nailgun.rpc as rpc
-from nailgun.rpc.receiver import NailgunReceiver
+from nailgun.rpc import utils as rpc_utils
 
 
 class RPCConsumer(ConsumerMixin):
@@ -41,34 +39,30 @@ class RPCConsumer(ConsumerMixin):
         callback = getattr(self.receiver, body["method"])
         try:
             callback(**body["args"])
-            db().commit()
         except errors.CannotFindTask as e:
             logger.warn(str(e))
-            db().rollback()
-        except Exception:
-            logger.error(traceback.format_exc())
-            db().rollback()
-        finally:
             msg.ack()
-            db().expire_all()
+        except Exception:
+            logger.exception('Unknown exception during callback call')
+            msg.ack()
+        except KeyboardInterrupt:
+            logger.error("Receiverd interrupted.")
+            msg.requeue()
+            raise
+        else:
+            db.commit()
+            msg.ack()
+        finally:
+            db.remove()
 
+    def on_precondition_failed(self, error_msg):
+        logger.warning(error_msg)
+        rpc_utils.delete_entities(
+            self.connection, rpc.nailgun_exchange, rpc.nailgun_queue)
 
-class RPCKombuThread(threading.Thread):
-
-    def __init__(self, rcvr_class=NailgunReceiver):
-        super(RPCKombuThread, self).__init__()
-        self.stoprequest = threading.Event()
-        self.receiver = rcvr_class
-        self.connection = None
-
-    def join(self, timeout=None):
-        self.stoprequest.set()
-        # this should interrupt inner kombu event loop
-        # actually, it doesn't
-        self.consumer.should_stop = True
-        super(RPCKombuThread, self).join(timeout)
-
-    def run(self):
-        with Connection(rpc.conn_str) as conn:
-            self.consumer = RPCConsumer(conn, self.receiver)
-            self.consumer.run()
+    def run(self, *args, **kwargs):
+        try:
+            super(RPCConsumer, self).run(*args, **kwargs)
+        except amqp_exceptions.PreconditionFailed as e:
+            self.on_precondition_failed(six.text_type(e))
+            self.run(*args, **kwargs)

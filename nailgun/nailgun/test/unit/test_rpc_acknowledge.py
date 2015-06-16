@@ -17,7 +17,7 @@
 import mock
 
 from nailgun.errors import errors
-from nailgun.rpc import receiverd
+from nailgun.rpc import consumer
 from nailgun.test import base
 
 
@@ -27,7 +27,7 @@ class TestRpcAcknowledge(base.BaseTestCase):
         super(TestRpcAcknowledge, self).setUp()
         self.receiver = mock.Mock()
         self.connection = mock.Mock()
-        self.consumer = receiverd.RPCConsumer(self.connection, self.receiver)
+        self.consumer = consumer.RPCConsumer(self.connection, self.receiver)
         self.msg = mock.Mock()
         self.body = {'method': 'test',
                      'args': {}}
