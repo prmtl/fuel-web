@@ -23,7 +23,7 @@ from fuel_agent.objects import partition
 class TestMD(test_base.BaseTestCase):
     def setUp(self):
         super(TestMD, self).setUp()
-        self.md = partition.Md('name', 'level')
+        self.md = partition.MD('name', 'level')
 
     def test_add_device_ok(self):
         self.assertEqual(0, len(self.md.devices))
@@ -83,30 +83,30 @@ class TestPartitionScheme(test_base.BaseTestCase):
                           self.p_scheme.root_device)
 
     def test_fs_by_device(self):
-        expected_fs = partition.Fs('device')
+        expected_fs = partition.FS('device')
         self.p_scheme.fss.append(expected_fs)
-        self.p_scheme.fss.append(partition.Fs('wrong_device'))
+        self.p_scheme.fss.append(partition.FS('wrong_device'))
         actual_fs = self.p_scheme.fs_by_device('device')
         self.assertEqual(expected_fs, actual_fs)
 
     def test_fs_by_mount(self):
-        expected_fs = partition.Fs('d', mount='mount')
+        expected_fs = partition.FS('d', mount='mount')
         self.p_scheme.fss.append(expected_fs)
-        self.p_scheme.fss.append(partition.Fs('w_d', mount='wrong_mount'))
+        self.p_scheme.fss.append(partition.FS('w_d', mount='wrong_mount'))
         actual_fs = self.p_scheme.fs_by_mount('mount')
         self.assertEqual(expected_fs, actual_fs)
 
     def test_pv_by_name(self):
-        expected_pv = partition.Pv('pv')
+        expected_pv = partition.PV('pv')
         self.p_scheme.pvs.append(expected_pv)
-        self.p_scheme.pvs.append(partition.Pv('wrong_pv'))
+        self.p_scheme.pvs.append(partition.PV('wrong_pv'))
         actual_pv = self.p_scheme.pv_by_name('pv')
         self.assertEqual(expected_pv, actual_pv)
 
     def test_vg_by_name(self):
-        expected_vg = partition.Vg('vg')
+        expected_vg = partition.VG('vg')
         self.p_scheme.vgs.append(expected_vg)
-        self.p_scheme.vgs.append(partition.Vg('wrong_vg'))
+        self.p_scheme.vgs.append(partition.VG('wrong_vg'))
         actual_vg = self.p_scheme.vg_by_name('vg')
         self.assertEqual(expected_vg, actual_vg)
 
@@ -123,33 +123,33 @@ class TestPartitionScheme(test_base.BaseTestCase):
 
     def test_md_next_name_fail(self):
         self.p_scheme.mds = [
-            partition.Md('/dev/md%s' % x, 'level') for x in range(0, 128)]
+            partition.MD('/dev/md%s' % x, 'level') for x in range(0, 128)]
         self.assertRaises(errors.MDAlreadyExistsError,
                           self.p_scheme.md_next_name)
 
     def test_md_by_name(self):
         self.assertEqual(0, len(self.p_scheme.mds))
-        expected_md = partition.Md('name', 'level')
+        expected_md = partition.MD('name', 'level')
         self.p_scheme.mds.append(expected_md)
-        self.p_scheme.mds.append(partition.Md('wrong_name', 'level'))
+        self.p_scheme.mds.append(partition.MD('wrong_name', 'level'))
         self.assertEqual(expected_md, self.p_scheme.md_by_name('name'))
 
     def test_md_by_mount(self):
         self.assertEqual(0, len(self.p_scheme.mds))
         self.assertEqual(0, len(self.p_scheme.fss))
-        expected_md = partition.Md('name', 'level')
-        expected_fs = partition.Fs('name', mount='mount')
+        expected_md = partition.MD('name', 'level')
+        expected_fs = partition.FS('name', mount='mount')
         self.p_scheme.mds.append(expected_md)
         self.p_scheme.fss.append(expected_fs)
-        self.p_scheme.fss.append(partition.Fs('wrong_name',
+        self.p_scheme.fss.append(partition.FS('wrong_name',
                                  mount='wrong_mount'))
         self.assertEqual(expected_md, self.p_scheme.md_by_mount('mount'))
 
     def test_md_attach_by_mount_md_exists(self):
         self.assertEqual(0, len(self.p_scheme.mds))
         self.assertEqual(0, len(self.p_scheme.fss))
-        expected_md = partition.Md('name', 'level')
-        expected_fs = partition.Fs('name', mount='mount')
+        expected_md = partition.MD('name', 'level')
+        expected_fs = partition.FS('name', mount='mount')
         self.p_scheme.mds.append(expected_md)
         self.p_scheme.fss.append(expected_fs)
         actual_md = self.p_scheme.md_attach_by_mount('device', 'mount')
