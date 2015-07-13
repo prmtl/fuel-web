@@ -28,6 +28,7 @@ from nailgun.errors import errors
 from nailgun.logger import logger
 
 from .objects.adapters import NailgunNodeAdapter
+from .objects.volumes import VolumeObject
 
 
 def is_service(space):
@@ -988,3 +989,47 @@ class VolumeManager(object):
 
     def __logger(self, message):
         logger.debug('VolumeManager %s: %s', id(self), message)
+
+    def get_default_volumes_conf(self):
+        return DisksFormatConvertor.format_disks_to_simple(
+            self.gen_volumes_info())
+
+    def set_volumes(self, volumes_data):
+        VolumeObject.set_volumes(
+            DisksFormatConvertor.format_disks_to_full(self.node,
+                                                      volumes_data))
+
+    def get_volumes(self):
+        return DisksFormatConvertor.format_disks_to_simple(
+            VolumeObject.get_volumes(self.node))
+
+
+class VolumeManagerV2(object):
+
+    def __init__(self, node):
+        self.node = NailgunNodeAdapter(node)
+
+    def get_default_volumes_conf(self):
+        # from fuel_agent.objects import Parted
+        def parted_from_disk(disk, disk_id=1):
+            # should be parsed as Parted
+            return {
+                'id': disk_id,
+                'label': '',
+                'device': disk['disk'],
+                'name': disk['name'],
+                'partitions': [],
+
+            }
+        return {
+            "parteds": [
+                parted_from_disk(disk, n)
+                for n, disk in enumerate(self.node.disks, start=1)
+            ]
+        }
+
+    def set_volumes(self, volumes_data):
+        return VolumeObject.set_volumes(self.node)
+
+    def get_volumes(self):
+        return VolumeObject.get_volumes(self.node)

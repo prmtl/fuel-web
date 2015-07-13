@@ -17,23 +17,31 @@
 """
 Handlers dealing with disks
 """
+from distutils.version import StrictVersion
 
-from ..manager import DisksFormatConvertor
+from .. import manager
 from nailgun.api.v1.handlers.base import BaseHandler
 from nailgun.api.v1.handlers.base import content
 from nailgun.api.v1.validators.node import NodeDisksValidator
 from nailgun import objects
 
 
+def get_volume_manager(node):
+    if node.cluster and StrictVersion(
+            node.cluster.release.environment_version) < StrictVersion('7.0'):
+        return manager.VolumeManager(node)
+    return manager.VolumeManagerV2(node)
+
+
 class NodeDisksHandler(BaseHandler):
-    """Node disks handler
-    """
+    """Node disks handler."""
 
     validator = NodeDisksValidator
 
     @content
     def GET(self, node_id):
         """:returns: JSONized node disks.
+
         :http: * 200 (OK)
                * 404 (node not found in db)
         """
@@ -41,21 +49,24 @@ class NodeDisksHandler(BaseHandler):
 
         node = self.get_object_or_404(objects.Node, node_id)
         node_volumes = VolumeManagerExtension.get_volumes(node)
-        return DisksFormatConvertor.format_disks_to_simple(node_volumes)
+        return manager.DisksFormatConvertor.format_disks_to_simple(
+            node_volumes)
 
     @content
     def PUT(self, node_id):
         """:returns: JSONized node disks.
+
         :http: * 200 (OK)
                * 400 (invalid disks data specified)
                * 404 (node not found in db)
         """
-        from ..extension import VolumeManagerExtension
-
         node = self.get_object_or_404(objects.Node, node_id)
-        data = self.checked_data(
+        vm = get_volume_manager(node)
+
+        volumes_data = self.checked_data(
             self.validator.validate,
-            node=node
+            node=node,
+            # vm=vm,
         )
 
         if node.cluster:
@@ -65,20 +76,17 @@ class NodeDisksHandler(BaseHandler):
                 node_id=node.id
             )
 
-        volumes_data = DisksFormatConvertor.format_disks_to_full(node, data)
-        VolumeManagerExtension.set_volumes(node, volumes_data)
-
-        return DisksFormatConvertor.format_disks_to_simple(
-            VolumeManagerExtension.get_volumes(node))
+        vm.set_volumes(volumes_data)
+        return vm.get_volumes()
 
 
 class NodeDefaultsDisksHandler(BaseHandler):
-    """Node default disks handler
-    """
+    """Node default disks handler."""
 
     @content
     def GET(self, node_id):
         """:returns: JSONized node disks.
+
         :http: * 200 (OK)
                * 404 (node or its attributes not found in db)
         """
@@ -86,19 +94,17 @@ class NodeDefaultsDisksHandler(BaseHandler):
         if not node.attributes:
             raise self.http(404)
 
-        volumes = DisksFormatConvertor.format_disks_to_simple(
-            node.volume_manager.gen_volumes_info())
-
-        return volumes
+        vm = get_volume_manager(node)
+        return vm.get_default_volumes_conf()
 
 
 class NodeVolumesInformationHandler(BaseHandler):
-    """Node volumes information handler
-    """
+    """Node volumes information handler."""
 
     @content
     def GET(self, node_id):
         """:returns: JSONized volumes info for node.
+
         :http: * 200 (OK)
                * 404 (node not found in db)
         """
@@ -106,5 +112,5 @@ class NodeVolumesInformationHandler(BaseHandler):
         if node.cluster is None:
             raise self.http(404, 'Cannot calculate volumes info. '
                                  'Please, add node to an environment.')
-        volumes_info = DisksFormatConvertor.get_volumes_info(node)
+        volumes_info = manager.DisksFormatConvertor.get_volumes_info(node)
         return volumes_info
